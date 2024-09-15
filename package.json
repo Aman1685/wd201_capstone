@@ -1,0 +1,14 @@
+{
+  "name": "wd201_capstone",
+  "version": "1.0.0",
+  "main": "lms.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "aman <dhimanaman1685@gmail.com>",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "husky": "^9.1.6"
+  }
+}
