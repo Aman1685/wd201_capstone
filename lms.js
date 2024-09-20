@@ -1,7 +1,13 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const session = require('express-session');
-const { Sequelize, DataTypes } = require('sequelize');
+const { Sequelize } = require('sequelize');
+const User = require('./models/user');
+const Course = require('./models/course');
+const Chapter = require('./models/chapter');
+const Page = require('./models/pages');
+const Enrollment = require('./models/enrollments');
+const CompletedPages = require('./models/completed_pages');
 
 // Initialize express and setup middleware
 const app = express();
@@ -17,9 +23,28 @@ app.use(session({
 }));
 
 // Initialize Sequelize (replace with your database credentials)
+const sequelize = new Sequelize('database', 'username', 'password', {
+    dialect: 'postgres',
+    host: 'localhost'
+});
+
+// Sync database and start server
+sequelize.sync().then(() => {
+    console.log('Database synced');
+}).catch((error) => {
+    console.error('Unable to sync database:', error);
+});
+
+// Routes
+
+// Home route (show courses list)
 app.get('/', async (req, res) => {
-    const courses = await Course.findAll();
-    res.render('index', { courses });
+    try {
+        const courses = await Course.findAll();
+        res.render('index', { courses });
+    } catch (error) {
+        res.render('error', { error });
+    }
 });
 
 // Display form to create a new course (Educator only)
@@ -89,7 +114,15 @@ app.post('/course/:course_id/enroll', async (req, res) => {
     }
 });
 
+// Error handling middleware
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).render('error', { error: { message: 'Something went wrong!' } });
+});
 
-    app.listen(3000, () => {
-        console.log('Server running on http://localhost:3000');
-    });
+// Start server
+app.listen(3000, () => {
+    console.log('Server running on http://localhost:3000');
+});
+
+module.exports = ("/lms.js");
