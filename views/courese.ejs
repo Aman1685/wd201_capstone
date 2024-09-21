@@ -1,0 +1,12 @@
+<%- include('layout.ejs') %>
+
+<h1>Available Courses</h1>
+<ul>
+    <% courses.forEach(course => { %>
+        <li>
+            <a href="/courses/<%= course.id %>"><%= course.name %></a>
+            <p><%= course.description %></p>
+        </li>
+    <% }) %>
+</ul>
+<a href="/courses/create">Create New Course</a>

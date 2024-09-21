@@ -1,10 +1,14 @@
+/* eslint-disable no-undef */
 /* eslint-disable no-unused-vars */
 const express = require("express");
 const lms = express();
 const bodyParser = require("body-parser");
-lms.use(bodyParser.json());
 const session = require('express-session');
+const bcrypt = require("bcrypt");
 const { Chapters, Course, Enrollments, Pages, Progress, Reports, User } = require("./models");
+const path = require('path');
+
+lms.use(bodyParser.json());
 
 lms.use(session({
     secret: 'your-secret-key',
@@ -12,172 +16,176 @@ lms.use(session({
     saveUninitialized: true
 }));
 
-function isAuthenticated(req, res, next) {
-    if (req.session.user) {
-        return next();
-    }
-    return res.status(401).json({ message: 'You need to be logged in' });
-}
+lms.set('view engine', 'ejs');
+lms.set('views', path.join(__dirname, 'views'));
 
+lms.use(express.urlencoded({ extended: true }));
+lms.use(express.static('public'));
+
+lms.use((req, res, next) => {
+    res.locals.user = req.session.user || null;
+    next();
+});
+
+// Home page route
+lms.get('/', (req, res) => {
+    const title = 'Home';
+    const user = req.session.user || null;
+    res.render('index', { title, user });
+});
+
+// GET route for signup page
+lms.get("/signup", (req, res) => {
+    res.render("signup");
+});
+
+// POST route for handling signup
 lms.post("/signup", async (req, res) => {
     try {
         const { name, email, password } = req.body;
-        const user = await User.create({ name, email, password });
-        res.status(201).json(user);
+        const existingUser = await User.findOne({ where: { email } });
+        if (existingUser) {
+            return res.status(400).send("Email already in use");
+        }
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const newUser = await User.create({
+            name,
+            email,
+            password: hashedPassword
+        });
+        req.session.user = newUser;
+        res.redirect('/');
     } catch (error) {
-        res.status(422).json(error);
+        res.status(500).send("Error creating user");
     }
 });
 
-lms.post("/signin", async (req, res) => {
+// GET route for login page
+lms.get("/login", (req, res) => {
+    res.render("login");
+});
+
+// POST route for handling login
+lms.post("/login", async (req, res) => {
     try {
         const { email, password } = req.body;
-        const user = await User.findOne({ where: { email, password } });
+        const user = await User.findOne({ where: { email } });
         if (!user) {
-            return res.status(401).json({ message: "Invalid credentials" });
+            return res.status(400).send("Invalid email or password");
+        }
+        const match = await bcrypt.compare(password, user.password);
+        if (!match) {
+            return res.status(400).send("Invalid email or password");
         }
         req.session.user = user;
-        res.status(200).json(user);
+        res.redirect('/courses');
     } catch (error) {
-        res.status(422).json(error);
+        res.status(500).send("Error logging in");
     }
 });
 
-lms.post("/signout", (req, res) => {
-    req.session.destroy();
-    res.status(200).json({ message: "Signed out successfully" });
+// Middleware to protect routes
+function isAuthenticated(req, res, next) {
+    if (req.session.user) {
+        return next();
+    } else {
+        res.redirect("/login");
+    }
+}
+
+// Educator - Create and manage courses
+lms.get("/courses/new", isAuthenticated, (req, res) => {
+    res.render("new-course");
 });
 
-lms.post("/course", isAuthenticated, async (req, res) => {
+lms.post("/courses", isAuthenticated, async (req, res) => {
+    const { name, description } = req.body;
     try {
-        const { name, description } = req.body;
-        const course = await Course.create({ name, description, userId: req.session.user.id });
-        res.status(201).json(course);
+        await Course.create({ name, description, educatorId: req.session.user.id });
+        res.redirect("/dashboard");
     } catch (error) {
-        res.status(422).json(error);
+        res.status(500).send("Error creating course");
     }
 });
 
-lms.post("/chapter", isAuthenticated, async (req, res) => {
+// Enroll in course
+lms.post("/courses/:id/enroll", isAuthenticated, async (req, res) => {
     try {
-        const { title, courseId } = req.body;
-        const course = await Course.findByPk(courseId);
-
-        if (!course) {
-            return res.status(404).json({ error: "Course not found" });
-        }
-
-        const chapter = await Chapters.create({ title, courseId });
-        res.status(201).json(chapter);
+        const courseId = req.params.id;
+        await Enrollments.create({ courseId, studentId: req.session.user.id });
+        res.redirect(`/courses/${courseId}`);
     } catch (error) {
-        res.status(422).json(error);
+        res.status(500).send("Error enrolling in course");
     }
 });
 
-lms.post("/page", isAuthenticated, async (req, res) => {
+// Student - View course progress and mark pages as complete
+lms.post("/courses/:courseId/chapters/:chapterId/pages/:pageId/complete", isAuthenticated, async (req, res) => {
+    const { courseId, pageId } = req.params;
     try {
-        const { title, content, chapter_id } = req.body;
-
-        const chapter = await Chapters.findByPk(chapter_id);
-        if (!chapter) {
-            return res.status(404).json({ error: "Chapter not found" });
-        }
-
-        const page = await Pages.create({ title, content, chapter_id });
-        res.status(201).json({ message: "Page created successfully", page });
+        await Progress.create({
+            studentId: req.session.user.id,
+            courseId,
+            pageId,
+            completed: true
+        });
+        res.redirect(`/courses/${courseId}`);
     } catch (error) {
-        console.error(error);
-        res.status(422).json(error);
+        res.status(500).send("Error marking page as complete");
     }
 });
 
-lms.post("/enroll", isAuthenticated, async (req, res) => {
+// Educator - View reports
+lms.get("/reports", isAuthenticated, async (req, res) => {
     try {
-        const { courseId } = req.body;
-        const course = await Course.findByPk(courseId);
-
-        if (!course) {
-            return res.status(404).json({ error: "Course not found" });
-        }
-
-        await Enrollments.create({ userId: req.session.user.id, courseId });
-        res.status(200).json({ message: "Enrolled successfully" });
+        const reports = await Reports.findAll({
+            where: { educatorId: req.session.user.id }
+        });
+        res.render("reports", { reports });
     } catch (error) {
-        res.status(422).json(error);
+        res.status(500).send("Error fetching reports");
     }
 });
 
-lms.get("/course/:courseId/chapters", async (req, res) => {
-    try {
-        const { courseId } = req.params;
-        const chapters = await Chapters.findAll({ where: { courseId } });
-        res.status(200).json(chapters);
-    } catch (error) {
-        res.status(422).json(error);
-    }
-});
-
-lms.post("/page/:pageId/complete", isAuthenticated, async (req, res) => {
-    try {
-        const { pageId } = req.params;
-        const page = await Pages.findByPk(pageId);
-
-        if (!page) {
-            return res.status(404).json({ error: "Page not found" });
-        }
-
-        await Progress.create({ userId: req.session.user.id, pageId });
-        res.status(200).json({ message: "Page marked as complete" });
-    } catch (error) {
-        res.status(422).json(error);
-    }
-});
-
-lms.get("/course/:courseId/progress", isAuthenticated, async (req, res) => {
-    try {
-        const { courseId } = req.params;
-        const totalPages = await Pages.count({ where: { courseId } });
-        const completedPages = await Progress.count({ where: { userId: req.session.user.id } });
-
-        const progress = (completedPages / totalPages) * 100;
-        res.status(200).json({ progress });
-    } catch (error) {
-        res.status(422).json(error);
-    }
-});
-
-lms.get("/course/:courseId/report", isAuthenticated, async (req, res) => {
-    try {
-        const { courseId } = req.params;
-        const course = await Course.findByPk(courseId);
-
-        if (!course) {
-            return res.status(404).json({ error: "Course not found" });
-        }
-
-        const enrollmentCount = await Enrollments.count({ where: { courseId } });
-        res.status(200).json({ enrollmentCount });
-    } catch (error) {
-        res.status(422).json(error);
-    }
+// Change password route
+lms.get("/account/password", isAuthenticated, (req, res) => {
+    res.render("change-password");
 });
 
 lms.post("/account/password", isAuthenticated, async (req, res) => {
     try {
         const { oldPassword, newPassword } = req.body;
-        const user = await User.findByPk(req.session.user.id);
-
-        if (user.password !== oldPassword) {
-            return res.status(401).json({ error: "Old password is incorrect" });
+        const user = req.session.user;
+        const match = await bcrypt.compare(oldPassword, user.password);
+        if (!match) {
+            return res.status(400).send("Old password is incorrect");
         }
-
-        user.password = newPassword;
-        await user.save();
-
-        res.status(200).json({ message: "Password updated successfully" });
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        await user.update({ password: hashedPassword });
+        res.redirect("/dashboard");
     } catch (error) {
-        res.status(422).json(error);
+        res.status(500).send("Error updating password");
     }
+});
+// GET route to display courses
+lms.get("/courses", isAuthenticated, async (req, res) => {
+    try {
+        const courses = await Course.findAll(); // Fetch all courses
+        res.render("course", { course }); // Render the courses page with the list of courses
+    } catch (error) {
+        res.status(500).send("Error loading courses");
+    }
+});
+
+// Logout route
+lms.get("/logout", (req, res) => {
+    req.session.destroy(err => {
+        if (err) {
+            return res.redirect('/');
+        }
+        res.clearCookie('connect.sid');
+        res.redirect('/login');
+    });
 });
 
 module.exports = lms;

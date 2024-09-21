@@ -1,9 +1,10 @@
 {
   "name": "wd201_capstone",
   "version": "1.0.0",
-  "main": "lms.js",
+  "main": "index.js",
   "scripts": {
-    "start": "node index.js",
+    "start:prod": "node index.js",
+    "start": "nodemon -e js,ejs",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "aman <dhimanaman1685@gmail.com>",
@@ -15,9 +16,12 @@
     "globals": "^15.9.0",
     "husky": "^9.1.6",
     "jest": "^29.7.0",
+    "nodemon": "^3.1.7",
     "sequelize": "^6.37.3"
   },
   "dependencies": {
+    "bcrypt": "^5.1.1",
+    "ejs": "^3.1.10",
     "express": "^4.21.0",
     "express-session": "^1.18.0",
     "pg": "^8.13.0",
