@@ -10,9 +10,21 @@ module.exports = (sequelize, DataTypes) => {
      * The `models/index` file will call this method automatically.
      */
     static associate(models) {
-      // define association here
+      // A chapter belongs to a course
+      this.belongsTo(models.Course, {
+        foreignKey: 'course_id',
+        onDelete: 'CASCADE', // If a course is deleted, its chapters will also be deleted
+      });
+
+      // A chapter has many pages
+      this.hasMany(models.Pages, {
+        foreignKey: 'chapter_id',
+        as: 'pages',
+        onDelete: 'CASCADE', // Deleting a chapter will delete its associated pages
+      });
     }
   }
+  
   Chapters.init({
     name: DataTypes.STRING,
     course_id: DataTypes.INTEGER
@@ -20,5 +32,6 @@ module.exports = (sequelize, DataTypes) => {
     sequelize,
     modelName: 'Chapters',
   });
+  
   return Chapters;
 };

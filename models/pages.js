@@ -1,18 +1,22 @@
 'use strict';
-const {
-  Model
-} = require('sequelize');
+const { Model } = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
   class Pages extends Model {
-    /**
-     * Helper method for defining associations.
-     * This method is not a part of Sequelize lifecycle.
-     * The `models/index` file will call this method automatically.
-     */
     static associate(models) {
-      // define association here
+      // A page belongs to a chapter
+      this.belongsTo(models.Chapters, {
+        foreignKey: 'chapter_id',
+        as: 'chapter',
+      });
+
+      // A page can have many progress entries
+      this.hasMany(models.Progress, {
+        foreignKey: 'page_id',
+        onDelete: 'CASCADE',
+      });
     }
   }
+
   Pages.init({
     title: DataTypes.STRING,
     content: DataTypes.TEXT,
@@ -21,5 +25,6 @@ module.exports = (sequelize, DataTypes) => {
     sequelize,
     modelName: 'Pages',
   });
+
   return Pages;
 };

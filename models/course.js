@@ -1,18 +1,30 @@
 'use strict';
-const {
-  Model
-} = require('sequelize');
+const { Model } = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
   class Course extends Model {
-    /**
-     * Helper method for defining associations.
-     * This method is not a part of Sequelize lifecycle.
-     * The `models/index` file will call this method automatically.
-     */
     static associate(models) {
-      // define association here
+      // A course has many chapters
+      this.hasMany(models.Chapters, {
+        foreignKey: 'course_id',
+        as: 'chapters',
+        onDelete: 'CASCADE',
+      });
+
+      // A course belongs to an educator (User)
+      this.belongsTo(models.User, {
+        foreignKey: 'educator_id',
+        as: 'educator',
+      });
+
+      // A course can have many enrollments
+      this.hasMany(models.Enrollments, {
+        foreignKey: 'course_id',
+        as: 'enrollments',
+        onDelete: 'CASCADE',
+      });
     }
   }
+
   Course.init({
     name: DataTypes.STRING,
     description: DataTypes.STRING,
@@ -21,5 +33,6 @@ module.exports = (sequelize, DataTypes) => {
     sequelize,
     modelName: 'Course',
   });
+
   return Course;
 };
