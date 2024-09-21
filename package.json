@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "lms.js",
   "scripts": {
-    "start": "node lms.js",
+    "start": "node index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "aman <dhimanaman1685@gmail.com>",
